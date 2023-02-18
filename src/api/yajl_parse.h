@@ -93,6 +93,7 @@ extern "C" {
 
         int (* yajl_start_array)(void * ctx);
         int (* yajl_end_array)(void * ctx);
+        int (* yajl_check_skip)(void * ctx);
     } yajl_callbacks;
 
     /** allocate a parser handle
@@ -101,7 +102,7 @@ extern "C" {
      *                    are encountered in the input text.  May be NULL,
      *                    which is only useful for validation.
      *  \param afs        memory allocation functions, may be NULL for to use
-     *                    C runtime library routines (malloc and friends) 
+     *                    C runtime library routines (malloc and friends)
      *  \param ctx        a context pointer that will be passed to callbacks.
      */
     YAJL_API yajl_handle yajl_alloc(const yajl_callbacks * callbacks,

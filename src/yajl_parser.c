@@ -154,7 +154,6 @@ yajl_render_error_string(yajl_handle hand, const unsigned char * jsonText,
         return yajl_status_client_canceled;                       \
     }
 
-
 yajl_status
 yajl_do_finish(yajl_handle hand)
 {
@@ -356,9 +355,10 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
                     hand->parseError = "invalid token, internal error";
                     goto around_again;
             }
-            /* got a value.  transition depends on the state we're in. */
+            /* got a value. check to continue, then transition depends on the state we're in. */
             {
                 yajl_state s = yajl_bs_current(hand->stateStack);
+
                 if (s == yajl_state_start || s == yajl_state_got_value) {
                     yajl_bs_set(hand->stateStack, yajl_state_parse_complete);
                 } else if (s == yajl_state_map_need_val) {
@@ -399,6 +399,11 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
                         _CC_CHK(hand->callbacks->yajl_map_key(hand->ctx, buf,
                                                               bufLen));
                     }
+                    if (hand->callbacks && hand->callbacks->yajl_check_skip && !hand->callbacks->yajl_check_skip(hand->ctx)) {
+                        _CC_CHK(hand->callbacks->yajl_end_map(hand->ctx));
+                        yajl_bs_set(hand->stateStack, yajl_state_skip_map);
+                        goto around_again;
+                    }
                     yajl_bs_set(hand->stateStack, yajl_state_map_sep);
                     goto around_again;
                 case yajl_tok_right_bracket:
@@ -414,7 +419,7 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
                 default:
                     yajl_bs_set(hand->stateStack, yajl_state_parse_error);
                     hand->parseError =
-                        "invalid object key (must be a string)"; 
+                        "invalid object key (must be a string)";
                     goto around_again;
             }
         }
@@ -438,6 +443,12 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
             }
         }
         case yajl_state_map_got_val: {
+            if (hand->callbacks && hand->callbacks->yajl_check_skip && !hand->callbacks->yajl_check_skip(hand->ctx)) {
+                _CC_CHK(hand->callbacks->yajl_end_map(hand->ctx));
+                yajl_bs_set(hand->stateStack, yajl_state_skip_map);
+                goto around_again;
+            }
+
             tok = yajl_lex_lex(hand->lexer, jsonText, jsonTextLen,
                                offset, &buf, &bufLen);
             switch (tok) {
@@ -466,6 +477,12 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
             }
         }
         case yajl_state_array_got_val: {
+            if (hand->callbacks && hand->callbacks->yajl_check_skip && !hand->callbacks->yajl_check_skip(hand->ctx)) {
+                _CC_CHK(hand->callbacks->yajl_end_array(hand->ctx));
+                yajl_bs_set(hand->stateStack, yajl_state_skip_array);
+                goto around_again;
+            }
+
             tok = yajl_lex_lex(hand->lexer, jsonText, jsonTextLen,
                                offset, &buf, &bufLen);
             switch (tok) {
@@ -487,6 +504,44 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
                     yajl_bs_set(hand->stateStack, yajl_state_parse_error);
                     hand->parseError =
                         "after array element, I expect ',' or ']'";
+                    goto around_again;
+            }
+        }
+        case yajl_state_skip_array: {
+            yajl_state last_state = yajl_bs_current(hand->stateStack);
+            tok = yajl_lex_lex(hand->lexer, jsonText, jsonTextLen,
+                               offset, &buf, &bufLen);
+            switch (tok) {
+                case yajl_tok_left_brace:
+                    yajl_bs_push(hand->stateStack, yajl_state_skip_array);
+                    goto around_again;
+                case yajl_tok_right_brace:
+                    yajl_bs_pop(hand->stateStack);
+
+                    if (last_state != yajl_state_skip_array) {
+                        yajl_bs_push(hand->stateStack, yajl_state_start);  // so end array callback can be triggered
+                    }
+                    goto around_again;
+                default:
+                    goto around_again;
+            }
+        }
+        case yajl_state_skip_map: {
+            yajl_state last_state = yajl_bs_current(hand->stateStack);
+            tok = yajl_lex_lex(hand->lexer, jsonText, jsonTextLen,
+                               offset, &buf, &bufLen);
+            switch (tok) {
+                case yajl_tok_left_bracket:
+                    yajl_bs_push(hand->stateStack, yajl_state_skip_map);
+                    goto around_again;
+                case yajl_tok_right_bracket:
+                    yajl_bs_pop(hand->stateStack);
+
+                    if (last_state != yajl_state_skip_map) {
+                        yajl_bs_push(hand->stateStack, yajl_state_start);  // so end array callback can be triggered
+                    }
+                    goto around_again;
+                default:
                     goto around_again;
             }
         }

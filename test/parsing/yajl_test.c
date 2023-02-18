@@ -134,6 +134,11 @@ static int test_yajl_end_array(void *ctx)
     return 1;
 }
 
+static int test_yajl_check_skip(void *ctx)
+{
+    return 1;
+}
+
 static yajl_callbacks callbacks = {
     test_yajl_null,
     test_yajl_boolean,
@@ -145,7 +150,8 @@ static yajl_callbacks callbacks = {
     test_yajl_map_key,
     test_yajl_end_map,
     test_yajl_start_array,
-    test_yajl_end_array
+    test_yajl_end_array,
+    test_yajl_check_skip
 };
 
 static void usage(const char * progname)
